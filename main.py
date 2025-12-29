@@ -52,6 +52,11 @@ def main():
                         default=0.7,
                         help='相似度阈值 (0-1)，超过此值视为匹配 (默认: 0.7)')
 
+    parser.add_argument('--dtw-threshold',
+                        type=float,
+                        default=None,
+                        help='DTW距离阈值（无量纲），低于此值视为匹配。若设置则优先使用DTW距离判断')
+
     parser.add_argument('--hop-ratio',
                         type=float,
                         default=0.15,
@@ -98,6 +103,8 @@ def main():
     print(f"  源音频: {source_audio}")
     print(f"  特征类型: {feature_name}")
     print(f"  目标采样率: {args.sample_rate} Hz")
+    if args.dtw_threshold is not None:
+        print(f"  DTW距离阈值: {args.dtw_threshold} (无量纲，优先判断标准)")
     print(f"  相似度阈值: {args.threshold}")
     print(f"  跳跃比例: {args.hop_ratio}")
     print(f"  计算方法: DTW + 余弦相似度（同时计算）")
@@ -138,6 +145,13 @@ def main():
             for i, match in enumerate(matches_cosine, 1):
                 print(f"  {i}. {match['start_time']:.2f}秒 - {match['end_time']:.2f}秒, "
                       f"相似度: {match['similarity']:.4f} ({match['similarity']*100:.2f}%)")
+
+        # 显示每个位置的相似度分数
+        print(f"\n【各位置相似度分数】")                
+        if dtw_distances:
+            for i, dtw_distance in enumerate(dtw_distances):
+                print(f"位置 {positions[i]:.2f}秒 DTW距离: {dtw_distance:.6f}")
+
          # 显示相似度分布统计
         print(f"\n【相似度统计】")
         print(f"DTW算法:")
@@ -149,10 +163,11 @@ def main():
         print(f"  最大相似度: {np.max(similarities_cosine):.4f}")
         print(f"  最小相似度: {np.min(similarities_cosine):.4f}")
 
-        print(f"\n【DTW距离统计】")
+        print(f"\n【DTW距离统计】（标准化距离，无量纲，可跨配置比较）")
         print(f"  平均DTW距离: {np.mean(dtw_distances):.2f}")
         print(f"  最小DTW距离: {np.min(dtw_distances):.2f}")
         print(f"  最大DTW距离: {np.max(dtw_distances):.2f}")
+        print(f"  距离范围: {np.max(dtw_distances) - np.min(dtw_distances):.2f}")
 
         # 显示最佳匹配位置 - DTW
         print(f"\n【最佳匹配位置 - DTW算法】")
@@ -160,7 +175,7 @@ def main():
         print(f"  结束时间: {best_match_dtw['end_time']:.2f} 秒")
         print(
             f"  相似度: {best_match_dtw['similarity']:.4f} ({best_match_dtw['similarity']*100:.2f}%)")
-        print(f"  DTW距离: {best_match_dtw['dtw_distance']:.2f} (归一化后，越小越相似)")
+        print(f"  标准化DTW距离: {best_match_dtw['dtw_distance']:.2f} (无量纲，越小越相似)")
 
         # 显示最佳匹配位置 - 余弦相似度
         print(f"\n【最佳匹配位置 - 余弦相似度】")
@@ -170,8 +185,12 @@ def main():
             f"  相似度: {best_match_cosine['similarity']:.4f} ({best_match_cosine['similarity']*100:.2f}%)")
 
         # 判断是否存在（综合两种算法）
-        # 使用更严格的判断：DTW相对相似度 >= threshold 且 余弦绝对相似度 >= threshold
-        dtw_match = best_match_dtw['similarity'] >= args.threshold
+        # 如果设置了DTW距离阈值，则基于距离判断；否则基于相似度判断
+        if args.dtw_threshold is not None:
+            dtw_match = best_match_dtw['dtw_distance'] <= args.dtw_threshold
+        else:
+            dtw_match = best_match_dtw['similarity'] >= args.threshold
+        
         cosine_match = best_match_cosine['similarity'] >= args.threshold
 
         if dtw_match and cosine_match:
@@ -198,16 +217,24 @@ def main():
 
         # 显示同时超过阈值的匹配位置
         if matches_both:
+            dtw_threshold_desc = f"DTW距离 ≤ {args.dtw_threshold:.2f}" if args.dtw_threshold is not None else f"DTW相似度 ≥ {args.threshold*100:.0f}%"
             print(
-                f"\n【两种算法同时匹配的位置】 (DTW ≥ {args.threshold*100:.0f}% 且 余弦 ≥ {args.threshold*100:.0f}%):")
+                f"\n【两种算法同时匹配的位置】 ({dtw_threshold_desc} 且 余弦 ≥ {args.threshold*100:.0f}%):")
             for i, match in enumerate(matches_both, 1):
                 print(
                     f"  {i}. {match['start_time']:.2f}秒 - {match['end_time']:.2f}秒")
-                print(f"     DTW相似度: {match['similarity_dtw']:.4f} ({match['similarity_dtw']*100:.2f}%), "
-                      f"余弦相似度: {match['similarity_cosine']:.4f} ({match['similarity_cosine']*100:.2f}%)")
+                if args.dtw_threshold is not None:
+                    dtw_dist = match.get('dtw_distance')
+                    dtw_dist_str = f"{dtw_dist:.2f}" if dtw_dist is not None else "N/A"
+                    print(f"     DTW距离: {dtw_dist_str}, "
+                          f"余弦相似度: {match['similarity_cosine']:.4f} ({match['similarity_cosine']*100:.2f}%)")
+                else:
+                    print(f"     DTW相似度: {match['similarity_dtw']:.4f} ({match['similarity_dtw']*100:.2f}%), "
+                          f"余弦相似度: {match['similarity_cosine']:.4f} ({match['similarity_cosine']*100:.2f}%)")
         else:
+            dtw_threshold_desc = f"DTW距离 ≤ {args.dtw_threshold:.2f}" if args.dtw_threshold is not None else f"DTW相似度 ≥ {args.threshold*100:.0f}%"
             print(
-                f"\n【两种算法同时匹配的位置】 (DTW ≥ {args.threshold*100:.0f}% 且 余弦 ≥ {args.threshold*100:.0f}%):")
+                f"\n【两种算法同时匹配的位置】 ({dtw_threshold_desc} 且 余弦 ≥ {args.threshold*100:.0f}%):")
             print(f"  未找到同时满足两种算法阈值的位置")
 
     except FileNotFoundError as e:
