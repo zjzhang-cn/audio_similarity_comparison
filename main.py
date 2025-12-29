@@ -457,6 +457,19 @@ def main():
         print("\n" + "="*60)
         print("搜索结果:")
         print("="*60)
+        # 显示所有超过阈值的匹配 - DTW
+        if matches_dtw:
+            print(f"\n【DTW匹配位置】 (相似度 ≥ {args.threshold*100:.0f}%):")
+            for i, match in enumerate(matches_dtw, 1):
+                print(f"  {i}. {match['start_time']:.2f}秒 - {match['end_time']:.2f}秒, "
+                      f"相似度: {match['similarity']:.4f} ({match['similarity']*100:.2f}%)")
+        
+        # 显示所有超过阈值的匹配 - 余弦相似度
+        if matches_cosine:
+            print(f"\n【余弦相似度匹配位置】 (相似度 ≥ {args.threshold*100:.0f}%):")
+            for i, match in enumerate(matches_cosine, 1):
+                print(f"  {i}. {match['start_time']:.2f}秒 - {match['end_time']:.2f}秒, "
+                      f"相似度: {match['similarity']:.4f} ({match['similarity']*100:.2f}%)")        
          # 显示相似度分布统计
         print(f"\n【相似度统计】")
         print(f"DTW算法:")
@@ -472,7 +485,7 @@ def main():
         print(f"  平均DTW距离: {np.mean(dtw_distances):.2f}")
         print(f"  最小DTW距离: {np.min(dtw_distances):.2f}")
         print(f"  最大DTW距离: {np.max(dtw_distances):.2f}")
-        
+
         # 显示最佳匹配位置 - DTW
         print(f"\n【最佳匹配位置 - DTW算法】")
         print(f"  起始时间: {best_match_dtw['start_time']:.2f} 秒")
@@ -487,9 +500,9 @@ def main():
         print(f"  相似度: {best_match_cosine['similarity']:.4f} ({best_match_cosine['similarity']*100:.2f}%)")
         
         # 判断是否存在（综合两种算法）
-        # 使用更严格的判断：DTW相对相似度 >= 0.7 且 余弦绝对相似度 >= 0.7
-        dtw_match = best_match_dtw['similarity'] >= 0.7
-        cosine_match = best_match_cosine['similarity'] >= 0.7
+        # 使用更严格的判断：DTW相对相似度 >= threshold 且 余弦绝对相似度 >= threshold
+        dtw_match = best_match_dtw['similarity'] >= args.threshold
+        cosine_match = best_match_cosine['similarity'] >= args.threshold
         
         if dtw_match and cosine_match:
             print(f"\n✓ {target_audio} 在 {source_audio} 中存在")
@@ -507,35 +520,19 @@ def main():
             print(f"\n✗ {target_audio} 在 {source_audio} 中不存在")
             print(f"  DTW最高相似度: {best_match_dtw['similarity']*100:.2f}%")
             print(f"  余弦最高相似度: {best_match_cosine['similarity']*100:.2f}%")
-            print(f"  两种算法均未达到70%阈值")
+            print(f"  两种算法均未达到{args.threshold*100:.0f}%阈值")
         
         # 显示同时超过阈值的匹配位置
         if matches_both:
-            print(f"\n【两种算法同时匹配的位置】 (DTW ≥ 70% 且 余弦 ≥ 70%):")
+            print(f"\n【两种算法同时匹配的位置】 (DTW ≥ {args.threshold*100:.0f}% 且 余弦 ≥ {args.threshold*100:.0f}%):")
             for i, match in enumerate(matches_both, 1):
                 print(f"  {i}. {match['start_time']:.2f}秒 - {match['end_time']:.2f}秒")
                 print(f"     DTW相似度: {match['similarity_dtw']:.4f} ({match['similarity_dtw']*100:.2f}%), "
                       f"余弦相似度: {match['similarity_cosine']:.4f} ({match['similarity_cosine']*100:.2f}%)")
         else:
-            print(f"\n【两种算法同时匹配的位置】 (DTW ≥ 70% 且 余弦 ≥ 70%):")
+            print(f"\n【两种算法同时匹配的位置】 (DTW ≥ {args.threshold*100:.0f}% 且 余弦 ≥ {args.threshold*100:.0f}%):")
             print(f"  未找到同时满足两种算法阈值的位置")
-        
-        # # 显示所有超过阈值的匹配 - DTW
-        # if matches_dtw:
-        #     print(f"\n【DTW匹配位置】 (相似度 ≥ 70%):")
-        #     for i, match in enumerate(matches_dtw, 1):
-        #         print(f"  {i}. {match['start_time']:.2f}秒 - {match['end_time']:.2f}秒, "
-        #               f"相似度: {match['similarity']:.4f} ({match['similarity']*100:.2f}%)")
-        
-        # # 显示所有超过阈值的匹配 - 余弦相似度
-        # if matches_cosine:
-        #     print(f"\n【余弦相似度匹配位置】 (相似度 ≥ 70%):")
-        #     for i, match in enumerate(matches_cosine, 1):
-        #         print(f"  {i}. {match['start_time']:.2f}秒 - {match['end_time']:.2f}秒, "
-        #               f"相似度: {match['similarity']:.4f} ({match['similarity']*100:.2f}%)")
-        
-       
-        
+                
     except FileNotFoundError as e:
         print(f"错误: 找不到音频文件")
         print(f"请确保以下文件存在:")
