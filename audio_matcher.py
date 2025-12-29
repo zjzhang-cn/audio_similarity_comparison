@@ -8,9 +8,9 @@ import numpy as np
 import librosa
 
 from audio_processing import load_and_preprocess_audio
-from mfcc_extraction import extract_audio_mfcc
+from audio_extraction import extract_audio_mfcc, extract_audio_fbank
 from similarity_calculation import compute_dtw_similarity, compute_similarity, normalize_dtw_similarities
-from cache_manager import get_cache_path, load_source_mfcc_cache, save_source_mfcc_cache
+from cache_manager import get_cache_path, load_source_feature_cache, save_source_feature_cache
 
 
 def compute_window_similarities(target_mfcc, source_mfcc, target_y, source_y, source_sr, hop_ratio):
@@ -169,14 +169,15 @@ def find_best_matches(positions, similarities_dtw, similarities_cosine, dtw_dist
     return best_match_dtw, best_match_cosine
 
 
-def find_audio_in_audio(target_path, source_path, n_mfcc=13, threshold=0.7, hop_ratio=0.5, trim_silence_enabled=True, silence_threshold=30, reduce_noise_enabled=False):
+def find_audio_in_audio(target_path, source_path, feature_type='mfcc', n_features=13, threshold=0.7, hop_ratio=0.5, trim_silence_enabled=True, silence_threshold=30, reduce_noise_enabled=False):
     """
     在源音频中查找目标音频片段（主函数）
     
     参数:
         target_path: 目标音频文件路径
         source_path: 源音频文件路径
-        n_mfcc: MFCC维度
+        feature_type: 特征类型 ('mfcc' 或 'fbank')
+        n_features: 特征维度（MFCC维度或Mel滤波器数量）
         threshold: 相似度阈值
         hop_ratio: 滑动窗口跳跃比例
         trim_silence_enabled: 是否移除静音
@@ -192,9 +193,13 @@ def find_audio_in_audio(target_path, source_path, n_mfcc=13, threshold=0.7, hop_
     if trim_silence_enabled:
         print(f"已启用静音移除（阈值: {silence_threshold}dB）")
     
-    # MFCC参数
+    # 特征提取参数
     window_ms = 25
     hop_ms = 10
+    
+    # 显示特征类型
+    feature_name = "MFCC" if feature_type == 'mfcc' else "Fbank"
+    print(f"特征类型: {feature_name}, 维度: {n_features}")
     
     # 1. 加载和预处理目标音频
     target_y, target_sr, _ = load_and_preprocess_audio(
@@ -203,17 +208,25 @@ def find_audio_in_audio(target_path, source_path, n_mfcc=13, threshold=0.7, hop_
         trim_silence_enabled=trim_silence_enabled,
         silence_threshold=silence_threshold
     )
-    
-    # 2. 提取目标音频MFCC
-    target_mfcc, n_fft, hop_length = extract_audio_mfcc(target_y, target_sr, n_mfcc, window_ms, hop_ms)
     target_duration = len(target_y) / target_sr
     
-    # 3. 加载源音频（尝试从缓存加载）
-    cache_path = get_cache_path(source_path, n_mfcc, window_ms, hop_ms)
-    cache_data = load_source_mfcc_cache(cache_path, source_path)
+    # 2. 提取目标音频特征（MFCC或Fbank）
+    if feature_type == 'fbank':
+        target_features, n_fft, hop_length = extract_audio_fbank(target_y, target_sr, n_features, window_ms, hop_ms)
+    else:  # 默认使用MFCC
+        target_features, n_fft, hop_length = extract_audio_mfcc(target_y, target_sr, n_features, window_ms, hop_ms)
     
-    if cache_data is not None:
-        source_mfcc = cache_data['source_mfcc']
+    load_end_time = time.time()
+    load_elapsed = load_end_time - load_start_time
+    print(f"目标音频加载完成，时长: {target_duration:.2f}秒，耗时: {load_elapsed:.2f}秒")
+    
+    # 3. 尝试从缓存加载源音频特征
+    cache_path = get_cache_path(source_path, feature_type, n_features, window_ms, hop_ms)
+    cache_data = load_source_feature_cache(cache_path, source_path)
+    
+    if cache_data:
+        print(f"从缓存加载源音频 {feature_name} 特征")
+        source_features = cache_data['source_features']
         source_y = cache_data['source_y']
         source_sr = cache_data['source_sr']
         source_duration = cache_data['source_duration']
@@ -227,28 +240,32 @@ def find_audio_in_audio(target_path, source_path, n_mfcc=13, threshold=0.7, hop_
         )
         source_duration = len(source_y) / source_sr
         
-        # 提取源音频MFCC
-        source_mfcc, _, _ = extract_audio_mfcc(source_y, source_sr, n_mfcc, window_ms, hop_ms)
+        # 提取源音频特征（MFCC或Fbank）
+        if feature_type == 'fbank':
+            source_features, _, _ = extract_audio_fbank(source_y, source_sr, n_features, window_ms, hop_ms)
+        else:
+            source_features, _, _ = extract_audio_mfcc(source_y, source_sr, n_features, window_ms, hop_ms)
         
         # 保存到缓存
-        save_source_mfcc_cache(cache_path, source_mfcc, source_y, source_sr, source_duration)
+        save_source_feature_cache(cache_path, source_features, source_y, source_sr, source_duration)
     
-    load_elapsed = time.time() - load_start_time
-    print(f"音频加载完成，耗时: {load_elapsed:.2f}秒")
-    print(f"目标音频长度: {target_duration:.2f}秒")
-    print(f"源音频长度: {source_duration:.2f}秒")
+    print(f"源音频时长: {source_duration:.2f}秒")
     
     # 4. 确保采样率一致
     if target_sr != source_sr:
         print(f"警告: 采样率不一致，重新采样到 {source_sr} Hz")
         target_y = librosa.resample(target_y, orig_sr=target_sr, target_sr=source_sr)
         target_sr = source_sr
-        target_mfcc, _, _ = extract_audio_mfcc(target_y, target_sr, n_mfcc, window_ms, hop_ms)
+        # 重新提取特征
+        if feature_type == 'fbank':
+            target_features, _, _ = extract_audio_fbank(target_y, target_sr, n_features, window_ms, hop_ms)
+        else:
+            target_features, _, _ = extract_audio_mfcc(target_y, target_sr, n_features, window_ms, hop_ms)
     
     # 5. 计算相似度
     print()
     positions, similarities_dtw, similarities_cosine, dtw_distances = compute_window_similarities(
-        target_mfcc, source_mfcc, target_y, source_y, source_sr, hop_ratio
+        target_features, source_features, target_y, source_y, source_sr, hop_ratio
     )
     
     # 6. 归一化DTW相似度

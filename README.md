@@ -1,6 +1,6 @@
 # 🎵 Audio Similarity Comparison
 
-基于 MFCC 和 DTW 的音频相似度比较与匹配工具
+基于 MFCC/Fbank 和 DTW 的音频相似度比较与匹配工具
 
 ## 📖 项目简介
 
@@ -11,20 +11,22 @@
 ### 🎯 核心功能
 - **精确匹配**：在长音频中查找目标音频片段，精确定位时间位置
 - **双算法验证**：DTW + 余弦相似度同时计算，降低误报率
+- **多种特征提取**：支持 MFCC 和 Fbank（Filter Bank）两种特征
 - **智能预处理**：自动静音移除、可选音频降噪
-- **高性能缓存**：MFCC缓存系统，22x搜索加速（0.22s → 0.01s）
+- **高性能缓存**：特征缓存系统，22x搜索加速（0.22s → 0.01s）
 
 ### 🔬 技术特性
-- **13维 MFCC**：25ms帧长，10ms步长，高时间分辨率
+- **MFCC特征**：13维（可配置），25ms帧长，10ms步长，高时间分辨率
+- **Fbank特征**：40个滤波器（可配置），保留更多频谱信息
 - **相对DTW归一化**：最小距离=100%，最大距离=0%
 - **滑动窗口搜索**：可配置跳跃比例，精度与速度平衡
 - **完全相同检测**：相似度≥99%时显示"完全相同"标记
 
 ### 📦 模块化架构
 - `audio_processing.py` - 音频加载、降噪、静音移除
-- `mfcc_extraction.py` - MFCC特征提取
+- `mfcc_extraction.py` - MFCC/Fbank特征提取
 - `similarity_calculation.py` - DTW与余弦相似度计算
-- `cache_manager.py` - MFCC缓存管理
+- `cache_manager.py` - 特征缓存管理
 - `audio_matcher.py` - 核心匹配算法
 - `main.py` - 命令行入口
 📊 **详细的匹配结果**
@@ -69,7 +71,9 @@ pip install librosa numpy scipy noisereduce
 |------|------|--------|------|
 | `--target` | `-t` | audio1.wav | 要查找的目标音频片段 |
 | `--source` | `-s` | audio.wav | 源音频文件（在其中搜索）|
+| `--feature-type` | - | mfcc | 特征类型：mfcc 或 fbank |
 | `--mfcc` | - | 13 | MFCC 特征维度数量 |
+| `--fbank` | - | 40 | Fbank 滤波器数量 |
 | `--threshold` | - | 0.7 | 相似度阈值（0-1），超过视为匹配 |
 | `--hop-ratio` | - | 0.15 | 滑动窗口跳跃比例（0-1）|
 | `--no-trim-silence` | - | False | 禁用静音移除 |
@@ -80,8 +84,14 @@ pip install librosa numpy scipy noisereduce
 ### 使用示例
 
 ```bash
-# 基本使用
+# 基本使用（MFCC特征）
 uv run python main.py -t audio1.wav -s audio.wav
+
+# 使用Fbank特征
+uv run python main.py -t audio1.wav -s audio.wav --feature-type fbank
+
+# 自定义Fbank滤波器数量
+uv run python main.py -t audio1.wav -s audio.wav --feature-type fbank --fbank 80
 
 # 高精度匹配（阈值90%）
 uv run python main.py -t audio1.wav -s audio.wav --threshold 0.9
@@ -216,11 +226,52 @@ DTW算法:
 
 ## 🔧 技术细节
 
-### MFCC特征提取
-- **维度**：13维（默认）
+### 音频特征提取
+
+#### MFCC (Mel-Frequency Cepstral Coefficients)
+MFCC是最常用的音频特征，通过模拟人耳对声音频率的非线性感知特性来提取特征。
+
+**参数配置：**
+- **维度**：13维（默认，可通过 --mfcc 调整）
 - **帧长**：25ms
 - **步长**：10ms（帧间重叠15ms）
-- **采样率**：自适应音频文件采样率
+- **特性**：对音色敏感，压缩频谱信息
+
+**适用场景：**
+- 语音识别
+- 说话人识别
+- 音乐风格分类
+- 一般音频匹配
+
+#### Fbank (Filter Bank Features)
+Fbank是MFCC的前置步骤，保留了更多原始频谱信息（MFCC在Fbank基础上进行DCT变换）。
+
+**参数配置：**
+- **滤波器数量**：40个（默认，可通过 --fbank 调整）
+- **帧长**：25ms
+- **步长**：10ms
+- **特性**：保留更多频谱细节，维度更高
+
+**适用场景：**
+- 需要更多频谱细节的场景
+- 深度学习音频任务
+- 环境声识别
+- 音乐信息检索
+
+#### MFCC vs Fbank 对比
+
+| 特性 | MFCC | Fbank |
+|------|------|-------|
+| 维度 | 较低（默认13维）| 较高（默认40维）|
+| 频谱信息 | 压缩（DCT变换）| 完整（无DCT）|
+| 计算速度 | 快 | 稍慢 |
+| 内存占用 | 小 | 稍大 |
+| 匹配精度 | 适中 | 更高细节 |
+| 推荐场景 | 语音、快速匹配 | 音乐、精确匹配 |
+
+**选择建议：**
+- **MFCC**：计算资源有限、需要快速响应、语音类音频
+- **Fbank**：追求更高精度、音乐类音频、需要保留频谱细节
 
 ### DTW算法
 1. **距离度量**：欧几里得距离
@@ -234,10 +285,11 @@ DTW算法:
 - 快速计算，适合粗筛选
 
 ### 缓存机制
-- **缓存内容**：源音频MFCC + 原始数据
-- **缓存格式**：`{audio_name}_mfcc_cache_{n_mfcc}_{window_ms}_{hop_ms}.pkl`
+- **缓存内容**：源音频特征（MFCC或Fbank）+ 原始数据
+- **缓存格式**：`{audio_name}_cache_{feature_type}_{n_features}_{window_ms}_{hop_ms}.pkl`
 - **失效机制**：文件修改时间检测
 - **性能提升**：22倍加速（0.22s → 0.01s）
+- **智能识别**：自动向后兼容旧MFCC缓存格式
 
 ## 🎓 算法流程
 

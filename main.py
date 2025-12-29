@@ -36,6 +36,17 @@ def main():
                         default=13,
                         help='MFCC特征维度数量 (默认: 13)')
 
+    parser.add_argument('--feature-type',
+                        type=str,
+                        choices=['mfcc', 'fbank'],
+                        default='mfcc',
+                        help='特征类型: mfcc 或 fbank (默认: mfcc)')
+
+    parser.add_argument('--fbank',
+                        type=int,
+                        default=40,
+                        help='Fbank滤波器数量 (默认: 40)')
+
     parser.add_argument('--threshold',
                         type=float,
                         default=0.7,
@@ -68,10 +79,19 @@ def main():
     trim_silence_enabled = not args.no_trim_silence
     reduce_noise_enabled = args.reduce_noise
 
+    # 根据特征类型确定特征维度
+    feature_type = args.feature_type
+    if feature_type == 'fbank':
+        n_features = args.fbank
+        feature_name = f"Fbank（{n_features}个滤波器）"
+    else:
+        n_features = args.mfcc
+        feature_name = f"MFCC（{n_features}维）"
+    
     print(f"配置信息:")
     print(f"  目标音频: {target_audio}")
     print(f"  源音频: {source_audio}")
-    print(f"  MFCC维度: {args.mfcc}")
+    print(f"  特征类型: {feature_name}")
     print(f"  相似度阈值: {args.threshold}")
     print(f"  跳跃比例: {args.hop_ratio}")
     print(f"  计算方法: DTW + 余弦相似度（同时计算）")
@@ -86,7 +106,8 @@ def main():
         matches_dtw, matches_cosine, matches_both, best_match_dtw, best_match_cosine, positions, similarities_dtw, similarities_cosine, dtw_distances = find_audio_in_audio(
             target_path=target_audio,
             source_path=source_audio,
-            n_mfcc=args.mfcc,
+            feature_type=feature_type,
+            n_features=n_features,
             threshold=args.threshold,
             hop_ratio=args.hop_ratio,
             trim_silence_enabled=trim_silence_enabled,
