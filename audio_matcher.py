@@ -169,7 +169,7 @@ def find_best_matches(positions, similarities_dtw, similarities_cosine, dtw_dist
     return best_match_dtw, best_match_cosine
 
 
-def find_audio_in_audio(target_path, source_path, feature_type='mfcc', n_features=13, threshold=0.7, hop_ratio=0.5, trim_silence_enabled=True, silence_threshold=30, reduce_noise_enabled=False):
+def find_audio_in_audio(target_path, source_path, feature_type='mfcc', n_features=13, threshold=0.7, hop_ratio=0.5, trim_silence_enabled=True, silence_threshold=30, reduce_noise_enabled=False, target_sr=8000):
     """
     在源音频中查找目标音频片段（主函数）
     
@@ -183,6 +183,7 @@ def find_audio_in_audio(target_path, source_path, feature_type='mfcc', n_feature
         trim_silence_enabled: 是否移除静音
         silence_threshold: 静音阈值
         reduce_noise_enabled: 是否启用降噪
+        target_sr: 目标采样率 (Hz)，默认8000
     
     返回:
         匹配结果、相似度等信息
@@ -206,7 +207,8 @@ def find_audio_in_audio(target_path, source_path, feature_type='mfcc', n_feature
         target_path, 
         reduce_noise_enabled=reduce_noise_enabled,
         trim_silence_enabled=trim_silence_enabled,
-        silence_threshold=silence_threshold
+        silence_threshold=silence_threshold,
+        target_sr=target_sr
     )
     target_duration = len(target_y) / target_sr
     
@@ -236,7 +238,8 @@ def find_audio_in_audio(target_path, source_path, feature_type='mfcc', n_feature
             source_path,
             reduce_noise_enabled=reduce_noise_enabled,
             trim_silence_enabled=False,  # 源音频不移除静音
-            silence_threshold=silence_threshold
+            silence_threshold=silence_threshold,
+            target_sr=target_sr
         )
         source_duration = len(source_y) / source_sr
         
@@ -250,33 +253,23 @@ def find_audio_in_audio(target_path, source_path, feature_type='mfcc', n_feature
         save_source_feature_cache(cache_path, source_features, source_y, source_sr, source_duration)
     
     print(f"源音频时长: {source_duration:.2f}秒")
+    print(f"采样率: {target_sr} Hz")
     
-    # 4. 确保采样率一致
-    if target_sr != source_sr:
-        print(f"警告: 采样率不一致，重新采样到 {source_sr} Hz")
-        target_y = librosa.resample(target_y, orig_sr=target_sr, target_sr=source_sr)
-        target_sr = source_sr
-        # 重新提取特征
-        if feature_type == 'fbank':
-            target_features, _, _ = extract_audio_fbank(target_y, target_sr, n_features, window_ms, hop_ms)
-        else:
-            target_features, _, _ = extract_audio_mfcc(target_y, target_sr, n_features, window_ms, hop_ms)
-    
-    # 5. 计算相似度
+    # 4. 计算相似度
     print()
     positions, similarities_dtw, similarities_cosine, dtw_distances = compute_window_similarities(
         target_features, source_features, target_y, source_y, source_sr, hop_ratio
     )
     
-    # 6. 归一化DTW相似度
+    # 5. 归一化DTW相似度
     similarities_dtw = normalize_dtw_similarities(similarities_dtw, dtw_distances)
     
-    # 7. 生成匹配列表
+    # 6. 生成匹配列表
     matches_dtw, matches_cosine, matches_both = generate_matches(
         positions, similarities_dtw, similarities_cosine, target_duration, threshold
     )
     
-    # 8. 找出最佳匹配
+    # 7. 找出最佳匹配
     best_match_dtw, best_match_cosine = find_best_matches(
         positions, similarities_dtw, similarities_cosine, dtw_distances, target_duration
     )

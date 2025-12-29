@@ -71,6 +71,11 @@ def main():
                         action='store_true',
                         help='启用降噪功能（需要安装 noisereduce 库）')
 
+    parser.add_argument('--sample-rate',
+                        type=int,
+                        default=8000,
+                        help='目标采样率 (Hz)，所有音频将重采样到此采样率 (默认: 8000)')
+
     args = parser.parse_args()
 
     # 设置参数
@@ -92,6 +97,7 @@ def main():
     print(f"  目标音频: {target_audio}")
     print(f"  源音频: {source_audio}")
     print(f"  特征类型: {feature_name}")
+    print(f"  目标采样率: {args.sample_rate} Hz")
     print(f"  相似度阈值: {args.threshold}")
     print(f"  跳跃比例: {args.hop_ratio}")
     print(f"  计算方法: DTW + 余弦相似度（同时计算）")
@@ -112,7 +118,8 @@ def main():
             hop_ratio=args.hop_ratio,
             trim_silence_enabled=trim_silence_enabled,
             silence_threshold=args.silence_threshold,
-            reduce_noise_enabled=reduce_noise_enabled
+            reduce_noise_enabled=reduce_noise_enabled,
+            target_sr=args.sample_rate
         )
 
         print("\n" + "="*60)

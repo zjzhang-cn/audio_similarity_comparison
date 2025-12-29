@@ -65,7 +65,7 @@ def trim_silence(y, sr, top_db=30, frame_length=2048, hop_length=512):
     return y_trimmed, removed_duration
 
 
-def load_and_preprocess_audio(audio_path, reduce_noise_enabled=False, trim_silence_enabled=False, silence_threshold=30):
+def load_and_preprocess_audio(audio_path, reduce_noise_enabled=False, trim_silence_enabled=False, silence_threshold=30, target_sr=None):
     """
     加载并预处理音频
     
@@ -74,6 +74,7 @@ def load_and_preprocess_audio(audio_path, reduce_noise_enabled=False, trim_silen
         reduce_noise_enabled: 是否启用降噪
         trim_silence_enabled: 是否移除静音
         silence_threshold: 静音阈值 (dB)
+        target_sr: 目标采样率 (Hz)，如果指定则重采样到此采样率
     
     返回:
         y: 音频时间序列
@@ -82,8 +83,8 @@ def load_and_preprocess_audio(audio_path, reduce_noise_enabled=False, trim_silen
     """
     print(f"处理音频: {os.path.basename(audio_path)}")
     
-    # 加载音频
-    y, sr = librosa.load(audio_path, sr=None)
+    # 加载音频（如果指定了目标采样率则直接重采样）
+    y, sr = librosa.load(audio_path, sr=target_sr)
     
     # 降噪处理
     if reduce_noise_enabled:
