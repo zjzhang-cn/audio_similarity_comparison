@@ -1,29 +1,32 @@
-# Audio Similarity Comparison
+# 🎵 Audio Similarity Comparison
 
-基于 MFCC 特征和 DTW 对齐的音频相似度比较与匹配工具。
+基于 MFCC 和 DTW 的音频相似度比较与匹配工具
 
-## 项目简介
+## 📖 项目简介
 
-本项目实现了一个强大的音频匹配系统，可以在长音频文件中查找并定位短音频片段。使用梅尔频率倒谱系数（MFCC）提取音频特征，并通过动态时间规整（DTW）算法进行精确匹配，能够处理时间变化和速度差异。
+一个高性能的音频片段匹配系统，可以在长音频文件中精确查找并定位短音频片段。采用模块化架构，集成了多种先进算法：
 
-## 主要特性
+- *✨ 主要特性
 
-✨ **13维 MFCC 特征提取**
-- 每 100ms 计算一次 MFCC
-- 50% 重叠，提供精细的时间分辨率
-- 自适应采样率处理
-- **自动移除静音部分**，提高匹配精度
+### 🎯 核心功能
+- **精确匹配**：在长音频中查找目标音频片段，精确定位时间位置
+- **双算法验证**：DTW + 余弦相似度同时计算，降低误报率
+- **智能预处理**：自动静音移除、可选音频降噪
+- **高性能缓存**：MFCC缓存系统，22x搜索加速（0.22s → 0.01s）
 
-🎯 **DTW 动态时间规整对齐**
-- 处理音频速度变化
-- 对时间扭曲具有鲁棒性
-- 智能相似度计算（基于相对距离）
+### 🔬 技术特性
+- **13维 MFCC**：25ms帧长，10ms步长，高时间分辨率
+- **相对DTW归一化**：最小距离=100%，最大距离=0%
+- **滑动窗口搜索**：可配置跳跃比例，精度与速度平衡
+- **完全相同检测**：相似度≥99%时显示"完全相同"标记
 
-🔍 **滑动窗口搜索**
-- 可调节的窗口跳跃比例
-- 实时进度显示
-- 多位置匹配检测
-
+### 📦 模块化架构
+- `audio_processing.py` - 音频加载、降噪、静音移除
+- `mfcc_extraction.py` - MFCC特征提取
+- `similarity_calculation.py` - DTW与余弦相似度计算
+- `cache_manager.py` - MFCC缓存管理
+- `audio_matcher.py` - 核心匹配算法
+- `main.py` - 命令行入口
 📊 **详细的匹配结果**
 - 精确的时间位置（起始/结束时间）
 - 相似度百分比
@@ -32,97 +35,74 @@
 
 ## 安装
 
-### 环境要求
+###🚀 快速开始
 
+### 环境要求
 - Python >= 3.13
 - 推荐使用 `uv` 包管理器
 
-### 安装步骤
+### 安装依赖
 
 ```bash
-# 克隆项目（如果适用）
-cd audio-similarity-comparison
-
-# 使用 uv 同步依赖
+# 使用 uv（推荐）
 uv sync
 
-# 或使用 pip 安装依赖
-pip install -r requirements.txt
+# 或使用 pip
+pip install librosa numpy scipy noisereduce
 ```
 
-### 依赖包
+### 核心依赖
+| 包名 | 版本 | 用途 |
+|------|------|------|
+| librosa | >= 0.10.0 | 音频处理、MFCC、DTW |
+| numpy | >= 1.24.0 | 数值计算 |
+| scipy | >= 1.10.0 | 余弦相似度 |
+| noisereduce | 3.0.3 | 音频降噪（可选）|
 
-- `librosa >= 0.10.0` - 音频处理和特征提取
-- `numpy >= 1.24.0` - 数值计算
-- `scipy >= 1.10.0` - 科学计算（余弦相似度）
+### 基本使用
 
-## 使用方法
+```📋 命令行参数
 
-### 基本用法
-
-1. 准备音频文件（或使用默认文件名）
-
-2. 运行程序（使用默认参数）：
-
-```bash
-uv run python main.py
-```
-
-3. 使用命令行参数指定音频文件：
-
-```bash
-# 指定目标音频和源音频
-uv run python main.py -t audio1.wav -s audio.wav
-
-# 或使用完整参数名
-uv run python main.py --target audio1.wav --source audio.wav
-```
-
-### 命令行参数
+### 完整参数列表
 
 | 参数 | 简写 | 默认值 | 说明 |
 |------|------|--------|------|
 | `--target` | `-t` | audio1.wav | 要查找的目标音频片段 |
 | `--source` | `-s` | audio.wav | 源音频文件（在其中搜索）|
 | `--mfcc` | - | 13 | MFCC 特征维度数量 |
-| `--threshold` | - | 0.7 | 相似度阈值（0-1）|
+| `--threshold` | - | 0.7 | 相似度阈值（0-1），超过视为匹配 |
 | `--hop-ratio` | - | 0.15 | 滑动窗口跳跃比例（0-1）|
-| `--no-dtw` | - | False | 禁用DTW，使用余弦相似度 |
 | `--no-trim-silence` | - | False | 禁用静音移除 |
-| `--silence-threshold` | - | 30 | 静音阈值（dB），低于此值视为静音 |
+| `--silence-threshold` | - | 30 | 静音阈值（dB）|
+| `--reduce-noise` | - | False | 启用降噪功能 |
 | `--help` | `-h` | - | 显示帮助信息 |
 
 ### 使用示例
 
-**示例 1：基本使用**
 ```bash
-uv run python main.py -t my_clip.wav -s long_audio.wav
-```
+# 基本使用
+uv run python main.py -t audio1.wav -s audio.wav
 
-**示例 2：自定义MFCC维度和阈值**
-```bash
-uv run python main.py -t audio1.wav -s audio.wav --mfcc 20 --threshold 0.8
-```
+# 高精度匹配（阈值90%）
+uv run python main.py -t audio1.wav -s audio.wav --threshold 0.9
 
-**示例 3：使用余弦相似度（更快）**
-```bash
-uv run python main.py -t audio1.wav -s audio.wav --no-dtw
-```
+# 启用降噪
+uv run python main.py -t audio2.wav -s audio.wav --reduce-noise
 
-**示例 4：精细搜索**
-```bash
-uv run python main.py -t audio1.wav -s audio.wav --hop-ratio 0.05 --threshold 0.6
-```
+# 自定义MFCC维度
+uv run python main.py -t audio1.wav -s audio.wav --mfcc 20
 
-**示例 5：快速搜索**
-```bash
-uv run python main.py -t audio1.wav -s audio.wav --hop-ratio 0.3 --mfcc 10
-``示例 6：禁用静音移除**
-```bash
+# 精细搜索（小跳跃比例）
+uv run python main.py -t audio1.wav -s audio.wav --hop-ratio 0.05
+
+# 快速搜索（大跳跃比例）
+uv run python main.py -t audio1.wav -s audio.wav --hop-ratio 0.3
+
+# 禁用静音移除
 uv run python main.py -t audio1.wav -s audio.wav --no-trim-silence
-```
 
-**示例 7：调整静音阈值（更严格）**
+# 调整静音阈值
+uv run python main.py -t audio1.wav -s audio.wav --silence-threshold 20
 ```bash
 uv run python main.py -t audio1.wav -s audio.wav --silence-threshold 20
 ```
@@ -159,231 +139,251 @@ uv run python main.py --help
 【所有匹配位置】 (相似度 ≥ 70%):
   1. 2.54秒 - 3.84秒, 相似度: 0.7813 (78.13%)
   2. 2.73秒 - 4.03秒, 相似度: 0.7015 (70.15%)
-  3. 4.49秒 - 5.79秒, 相似度: 1.0000 (100.00
-【最佳匹配位置】
-  算法: DTW（动态时间规整）对齐
-  起始时间: 4.31 秒
-  结束时间: 5.91 秒
-  相似度: 1.0000 (100.00%)
-  DTW距离: 140.94 (归一化后，越小越相似)
+## 📊 输出示例
 
-✓ audio1.wav 在 audio.wav 中存在
-  位置: 4.31秒 - 5.91秒
+```bash
+$ uv run python main.py -t audio1.wav -s audio.wav --threshold 0.9
 
-【所有匹配位置】 (相似度 ≥ 70%):
-  1. 1.20秒 - 2.79秒, 相似度: 0.8226 (82.26%)
-  2. 2.40秒 - 3.99秒, 相似度: 0.7572 (75.72%)
-  3. 4.31秒 - 5.91秒, 相似度: 1.0000 (100.00%)
-  4. 10.30秒 - 11.90秒, 相似度: 0.7373 (73.73%)
+配置信息:
+  目标音频: audio1.wav
+  源音频: audio.wav
+  MFCC维度: 13
+  相似度阈值: 0.9
+  跳跃比例: 0.15
+  计算方法: DTW + 余弦相似度（同时计算）
+  降噪: 否
+  移除静音: 是
+  静音阈值: 30dB
+
+正在加载音频文件...
+已启用静音移除（阈值: 30dB）
+处理音频: audio1.wav
+  移除了 0.30秒 的静音
+  从缓存加载: audio_mfcc_cache_13_25_10.pkl
+音频加载完成，耗时: 1.39秒
+目标音频长度: 1.30秒
+源音频长度: 12.30秒
+
+正在搜索匹配位置...
+同时使用: DTW对齐 + 余弦相似度
+搜索完成，耗时: 0.01秒
+
+============================================================
+搜索结果:
+============================================================
+
+【DTW匹配位置】 (相似度 ≥ 90%):
+  1. 4.49秒 - 5.79秒, 相似度: 1.0000 (100.00%) 完全相同
+
+【余弦相似度匹配位置】 (相似度 ≥ 90%):
+  24. 4.49秒 - 5.79秒, 相似度: 0.9924 (99.24%) 完全相同
 
 【相似度统计】
-  平均相似度: 0.3923
+DTW算法:
+  平均相似度: 0.2356
   最大相似度: 1.0000
   最小相似度: 0.0000
 
-### 通过命令行配置
+余弦相似度:
+  平均相似度: 0.9664
+  最大相似度: 0.9924
+  最小相似度: 0.9544
 
-推荐使用命令行参数动态配置，无需修改代码：
+【DTW距离统计】
+  平均DTW距离: 399.07
+  最小DTW距离: 202.60
+  最大DTW距离: 459.64
 
-```bash
-uv run python main.py -t audio1.wav -s audio.wav --mfcc 20 --threshold 0.8
+【最佳匹配位置 - DTW算法】
+  起始时间: 4.49 秒
+  结束时间: 5.79 秒
+  相似度: 1.0000 (100.00%)
+  DTW距离: 202.60 (归一化后，越小越相似)
+
+【最佳匹配位置 - 余弦相似度】
+  起始时间: 4.49 秒
+  结束时间: 5.79 秒
+  相似度: 0.9924 (99.24%)
+
+✓ audio1.wav 在 audio.wav 中存在
+  DTW推荐位置: 4.49秒 - 5.79秒
+  余弦相似度推荐位置: 4.49秒 - 5.79秒
+
+【两种算法同时匹配的位置】 (DTW ≥ 90% 且 余弦 ≥ 90%):
+  1. 4.49秒 - 5.79秒
+     DTW相似度: 1.0000 (100.00%), 余弦相似度: 0.9924 (99.24%)
 ```
 
-### 通过代码配置（高级）
+## 🔧 技术细节
 
-如果需要在代码中调用，可以直接使用 `find_audio_in_audio()` 函
-  平均DTW距离: 190.56
-  最小DTW距离: 140.94
-  最大DTW距离: 222.59
-```
+### MFCC特征提取
+- **维度**：13维（默认）
+- **帧长**：25ms
+- **步长**：10ms（帧间重叠15ms）
+- **采样率**：自适应音频文件采样率
 
-## 参数配置
+### DTW算法
+1. **距离度量**：欧几里得距离
+2. **路径寻找**：动态规划最优路径
+3. **归一化**：距离/路径长度
+4. **相对评分**：`1 - (d - min) / (max - min)`
 
-在 `main()` 函数中可以调整以下参数：
+### 余弦相似度
+- 特征向量展平后计算
+- `相似度 = 1 - 余弦距离`
+- 快速计算，适合粗筛选
 
-### 核心参数
+### 缓存机制
+- **缓存内容**：源音频MFCC + 原始数据
+- **缓存格式**：`{audio_name}_mfcc_cache_{n_mfcc}_{window_ms}_{hop_ms}.pkl`
+- **失效机制**：文件修改时间检测
+- **性能提升**：22倍加速（0.22s → 0.01s）
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `n_mfcc` | 13 | MFCC 特征维度数量 |
-| `threshold` | 0.7 | 相似度阈值（0-1），超过此值视为匹配 |
-| `hop_ratio` | 0.15 | 滑动窗口跳跃比例，越小越精确但计算越慢 |
-| `use_dtw` | True | 是否使用 DTW 对齐算法 |
-
-### MFCC 参数
-
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `window_ms` | 100 | MFCC 窗口长度（毫秒）|
-| `hop_ms` | 50 | MFCC 跳跃长度（毫秒），50% 重叠 |
-
-### 示例：自定义参数
-
-```python
-matches, best_match, positions, similarities, dtw_distances = find_audio_in_audio(
-    target_path="my_target.wav",
-    source_path="my_source.wav",
-    n_mfcc=20,           # 使用20维MFCC
-    threshold=0.8,       # 提高相似度阈值
-    hop_ratio=0.1,       # 更精细的搜索
-    use_dtw=True         # 使用DTW对齐
-)
-```静音移除
-
-在比较音频前自动移除静音部分，提高匹配精度：
-
-- **默认启用**：自动检测并移除开头和结尾的静音
-- **静音阈值**：默认 30dB，低于此值的声音视为静音
-- **仅处理目标音频**：源音频不移除静音，保持时间位置准确
-- **可配置**：通过 `--silence-threshold` 调整灵敏度
-- **可禁用**：使用 `--no-trim-silence` 参数
-
-**静音阈值调整建议：**
-- **30dB（默认）**：适合大多数场景
-- **20dB（严格）**：移除更多低音量部分
-- **40dB（宽松）**：只移除非常安静的部分
-
-### 
-
-## 技术细节
-
-### MFCC（梅尔频率倒谱系数）
-
-MFCC 是一种广泛用于语音和音频处理的特征表示方法：
-移除目标音频的静音部分（可选）
-3. 提取13维MFCC特征（100ms窗口，50%重叠）
-4. 滑动窗口遍历源音频
-5. 对每个窗口：
-   a. 提取窗口的MFCC特征
-   b. 使用DTW计算与目标的相似度
-   c. 记录位置和相似度
-6. 基于相对DTW距离重新计算相似度
-7TW 算法通过找到最优时间对齐路径来比较两个时间序列：
-
-1. **距离计算**：使用欧几里得距离计算帧间距离
-2. **路径寻找**：动态规划找到最小累积距离路径
-3. **相似度转换**：
-   - 归一化：距离 ÷ 路径长度
-   - 相对评分：最小距离 = 100%，最大距离 = 0%
-
-### 算法流程
+## 🎓 算法流程
 
 ```
-1. 加载目标音频和源音频
-2. 提取13维MFCC特征（100ms窗口，50%重叠）
-3. 滑动窗口遍历源音频
-4. 对每个窗口：
-   a. 提取窗口的MFCC特征
-   b. 使用DTW计算与目标的相似度
-   c. 记录位置和相似度
-5. 基于相对DTW距离重新计算相似度
-6. 输出最佳匹配和所有候选位置
+1. 音频预处理
+   ├── 加载音频文件
+   ├── [可选] 降噪处理
+   └── [可选] 静音移除（仅目标音频）
+
+2. MFCC特征提取
+   ├── 目标音频：直接计算
+   └── 源音频：尝试加载缓存 → 无缓存则计算并保存
+
+3. 滑动窗口搜索
+   ├── 按hop_ratio移动窗口
+   ├── 提取窗口MFCC（数组切片，无需重算）
+   ├── 同时计算DTW相似度和余弦相似度
+   └── 记录位置和相似度
+
+4. 结果处理
+   ├── DTW相似度归一化（相对距离）
+   ├── 生成匹配列表（分别 + 同时）
+   ├── 找出最佳匹配位置
+   └── 输出详细结果
 ```
 
-## 性能优化建议
+## ⚙️ 性能优化建议
 
 ### 提高搜索速度
-
-- 增大 `hop_ratio`（如 0.25 或 0.5）
-- 减少 MFCC 维度（如 8 或 10）
-- 使用余弦相似度代替 DTW（`use_dtw=False`）
+| 方法 | 参数 | 效果 | 副作用 |
+|------|------|------|--------|
+| 增大跳跃比例 | `--hop-ratio 0.3` | 3-5倍加速 | 可能遗漏部分匹配 |
+| 减少MFCC维度 | `--mfcc 8` | 1.5-2倍加速 | 特征表达能力下降 |
+| 使用缓存 | 自动 | 22倍加速 | 需要磁盘空间 |
 
 ### 提高匹配精度
+| 方法 | 参数 | 效果 | 副作用 |
+|------|------|------|--------|
+| 减小跳跃比例 | `--hop-ratio 0.05` | 更精细定位 | 计算时间增加 |
+| 增加MFCC维度 | `--mfcc 20` | 特征更丰富 | 计算时间增加 |
+| 启用降噪 | `--reduce-noise` | 提高干净度 | 处理时间增加 |
+| 双算法验证 | 默认启用 | 减少误报 | 需同时满足两个阈值 |
 
-- 减小 `hop_ratio`（如 0.05 或 0.1）
-- 增加 MFCC 维度（如 20 或 26）
-- 使用 DTW 对齐（`use_dtw=True`）
-- 调整相似度阈值
+## 📦 模块化架构
 
-## API 参考
+### 模块说明
 
-### `extract_mfcc(audio_path, n_mfcc=13, window_ms=100, hop_ms=50)`
+| 模块 | 职责 | 主要函数 |
+|------|------|----------|
+| `audio_processing.py` | 音频加载与预处理 | `load_and_preprocess_audio()`, `reduce_noise()`, `trim_silence()` |
+| `mfcc_extraction.py` | MFCC特征提取 | `extract_audio_mfcc()` |
+| `similarity_calculation.py` | 相似度计算 | `compute_dtw_similarity()`, `compute_similarity()`, `normalize_dtw_similarities()` |
+| `cache_manager.py` | MFCC缓存管理 | `load_source_mfcc_cache()`, `save_source_mfcc_cache()` |
+| `audio_matcher.py` | 核心匹配算法 | `find_audio_in_audio()`, `compute_window_similarities()`, `generate_matches()` |
+| `main.py` | 命令行入口 | `main()` |
 
-提取音频的 MFCC 特征。
+### 代码调用示例
 
-**返回值：**
-- `mfcc`: MFCC 特征矩阵 (n_mfcc, time_frames)
-- `mfcc_mean`: MFCC 均值向量 (n_mfcc,)
-- `y`: 音频时间序列
-- `sr`: 采样率
+```python
+from audio_matcher import find_audio_in_audio
 
-### `compute_dtw_similarity(mfcc1, mfcc2)`
+# 调用核心匹配函数
+matches_dtw, matches_cosine, matches_both, \
+best_match_dtw, best_match_cosine, \
+positions, similarities_dtw, similarities_cosine, dtw_distances = \
+    find_audio_in_audio(
+        target_path="audio1.wav",
+        source_path="audio.wav",
+        n_mfcc=13,
+        threshold=0.9,
+        hop_ratio=0.15,
+        trim_silence_enabled=True,
+        silence_threshold=30,
+        reduce_noise_enabled=False
+    )
 
-使用 DTW 计算两个 MFCC 特征的相似度。
+# 打印最佳匹配
+print(f"DTW最佳匹配: {best_match_dtw['start_time']:.2f}s - {best_match_dtw['end_time']:.2f}s")
+print(f"DTW相似度: {best_match_dtw['similarity']*100:.2f}%")
+```
 
-**返回值：**
-- `similarity`: 相似度分数 (0-1)
-- `dtw_distance`: 归一化 DTW 距离
-- `wp`: DTW 对齐路径
+## ❓ 常见问题
 
-### `find_audio_in_audio(target_path, source_path, ...)`
-
-在源音频中查找目标音频片段。
-
-- 调整静音阈值（`--silence-threshold`）
-- 尝试禁用静音移除（`--no-trim-silence`）
-**返回值：**
-- `matches`: 所有匹配位置列表
-- `best_match`: 最佳匹配信息
-- `positions`: 所有搜索位置
-- `similarities`: 所有相似度分数
-- `dtw_distances`: 所有 DTW 距离
-
-## 常见问题
-
-### Q: 为什么找不到明显存在的音频？
-
-
-### Q: 什么时候应该禁用静音移除？
-
-**A:**
-- 当目标音频本身包含重要的静音段落时
-- 当需要保持精确的时间长度匹配时
-- 当音频质量很好且没有明显静音时
+### Q1: 找不到明显存在的音频？
 **A:** 尝试以下方法：
-- 降低相似度阈值（如 0.5 或 0.6）
-- 减小 `hop_ratio` 进行更密集搜索
-- 检查音频文件质量和采样率是否一致
+- 降低阈值：`--threshold 0.6`
+- 减小跳跃比例：`--hop-ratio 0.05`
+- 检查采样率是否一致
+- 启用降噪：`--reduce-noise`
 
-### Q: 搜索速度太慢怎么办？
+### Q2: 搜索速度太慢？
+**A:** 优化方法：
+- 增大跳跃比例：`--hop-ratio 0.3`
+- 减少MFCC维度：`--mfcc 10`
+- 确保缓存生效（第二次搜索会快很多）
 
-**A:** 
-- 增大 `hop_ratio` 到 0.3-0.5
-- 使用余弦相似度（`use_dtw=False`）
-- 减少 MFCC 维度
+### Q3: 什么时候应该禁用静音移除？
+**A:** 以下场景：
+- 目标音频包含重要静音段落
+- 需要精确时间长度匹配
+- 音频质量很好无明显静音
 
-### Q: DTW 和余弦相似度有什么区别？
+### Q4: DTW和余弦相似度选哪个？
+**A:** 区别：
+- **DTW**：对时间变化鲁棒，精度高，速度慢
+- **余弦相似度**：速度快，适合严格对齐的音频
+- **双算法**：同时使用（默认），准确率最高
 
-**A:**
-- **DTW**: 适合处理时间变化，更鲁棒，但计算较慢
-- **余弦相似度**: 计算快速，适合严格对齐的音频
+### Q5: 降噪功能什么时候用？
+**A:** 适用场景：
+- 音频有明显背景噪声
+- 录音质量较差
+- 想提高静音检测准确性
+- 注意：会增加处理时间
 
-## 支持的音频格式
-- ✨ 命令行参数支持
-- ✨ **自动移除静音功能**
-- ✨ 可配置的静音阈值
+## 🎵 支持的音频格式
 
 通过 `librosa` 支持以下格式：
-- WAV
-- MP3
-- FLAC
-- OGG
-- M4A
+- ✅ WAV
+- ✅ MP3
+- ✅ FLAC
+- ✅ OGG
+- ✅ M4A
 
-## 许可证
+## 📝 更新日志
+
+### v0.2.0 (2025-12-29)
+- ✨ 模块化架构重构
+- ✨ 添加MFCC缓存系统（22x加速）
+- ✨ 双算法验证机制（DTW + 余弦）
+- ✨ 完全相同检测（≥99%）
+- ✨ 性能计时显示
+- ✨ 可选降噪功能
+
+### v0.1.0 (2025-12-28)
+- ✨ 初始版本
+- ✨ 13维MFCC特征提取
+- ✨ DTW动态时间规整
+- ✨ 滑动窗口搜索
+- ✨ 自动静音移除
+- ✨ 命令行参数支持
+
+## 📄 许可证
 
 本项目仅供学习和研究使用。
 
-## 作者
+---
 
-Audio Similarity Comparison Team
-
-## 更新日志
-
-### v0.1.0 (2025-12-29)
-- ✨ 初始版本
-- ✨ 实现13维 MFCC 特征提取
-- ✨ 实现 DTW 动态时间规整对齐
-- ✨ 实现滑动窗口搜索
-- ✨ 支持余弦相似度和 DTW 两种匹配算法
-- ✨ 详细的匹配结果输出
+**Audio Similarity Comparison** - 高性能音频匹配工具 🎵
