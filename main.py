@@ -203,143 +203,110 @@ def save_source_mfcc_cache(cache_path, source_mfcc, source_y, source_sr, source_
         print(f"  缓存保存失败: {e}")
 
 
-def find_audio_in_audio(target_path, source_path, n_mfcc=13, threshold=0.7, hop_ratio=0.5, trim_silence_enabled=True, silence_threshold=30, reduce_noise_enabled=False):
+def load_and_preprocess_audio(audio_path, reduce_noise_enabled=False, trim_silence_enabled=False, silence_threshold=30):
     """
-    在源音频中查找目标音频片段，同时使用DTW和余弦相似度两种方法
+    加载并预处理音频
     
     参数:
-        target_path: 要查找的目标音频文件路径 (audio1.wav)
-        source_path: 源音频文件路径 (audio.wav)
-        n_mfcc: MFCC维度
-        threshold: 相似度阈值
-        hop_ratio: 滑动窗口的跳跃比例 (0-1)
+        audio_path: 音频文件路径
+        reduce_noise_enabled: 是否启用降噪
         trim_silence_enabled: 是否移除静音
         silence_threshold: 静音阈值 (dB)
     
     返回:
-        matches_dtw: DTW匹配位置列表
-        matches_cosine: 余弦相似度匹配位置列表
-        best_match_dtw: DTW最佳匹配
-        best_match_cosine: 余弦相似度最佳匹配
-        positions: 所有搜索位置
+        y: 音频时间序列
+        sr: 采样率
+        removed_silence: 移除的静音时长
+    """
+    print(f"处理音频: {os.path.basename(audio_path)}")
+    
+    # 加载音频
+    y, sr = librosa.load(audio_path, sr=None)
+    
+    # 降噪处理
+    if reduce_noise_enabled:
+        y = reduce_noise(y, sr)
+        print(f"  已完成降噪")
+    
+    # 移除静音
+    removed_silence = 0.0
+    if trim_silence_enabled:
+        y, removed_silence = trim_silence(y, sr, top_db=silence_threshold)
+        if removed_silence > 0.01:
+            print(f"  移除了 {removed_silence:.2f}秒 的静音")
+    
+    return y, sr, removed_silence
+
+
+def extract_audio_mfcc(y, sr, n_mfcc=13, window_ms=25, hop_ms=10):
+    """
+    提取音频的MFCC特征
+    
+    参数:
+        y: 音频时间序列
+        sr: 采样率
+        n_mfcc: MFCC维度
+        window_ms: 窗口长度(毫秒)
+        hop_ms: 跳跃长度(毫秒)
+    
+    返回:
+        mfcc: MFCC特征矩阵
+        n_fft: FFT窗口长度
+        hop_length: 跳跃长度
+    """
+    n_fft = int(sr * window_ms / 1000)
+    hop_length = int(sr * hop_ms / 1000)
+    mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=n_mfcc, n_fft=n_fft, hop_length=hop_length)
+    return mfcc, n_fft, hop_length
+
+
+def compute_window_similarities(target_mfcc, source_mfcc, target_y, source_y, source_sr, hop_ratio):
+    """
+    在滑动窗口中计算DTW和余弦相似度
+    
+    参数:
+        target_mfcc: 目标音频MFCC特征
+        source_mfcc: 源音频MFCC特征
+        target_y: 目标音频时间序列
+        source_y: 源音频时间序列
+        source_sr: 源音频采样率
+        hop_ratio: 滑动窗口跳跃比例
+    
+    返回:
+        positions: 位置列表
         similarities_dtw: DTW相似度列表
         similarities_cosine: 余弦相似度列表
         dtw_distances: DTW距离列表
     """
-    print(f"正在加载音频文件...")
-    load_start_time = time.time()
-    
-    if trim_silence_enabled:
-        print(f"已启用静音移除（阈值: {silence_threshold}dB）")
-    
-    # 计算帧参数：帧长25ms，步长10ms
-    window_ms = 25
-    hop_ms = 10
-    
-    # 加载目标音频（要查找的片段）
-    target_y, target_sr = librosa.load(target_path, sr=None)
-    
-    # 降噪处理
-    if reduce_noise_enabled:
-        print(f"处理目标音频: {target_path}")
-        target_y = reduce_noise(target_y, target_sr)
-        print(f"  已完成降噪")
-    
-    # 移除目标音频的静音
-    if trim_silence_enabled:
-        if not reduce_noise_enabled:
-            print(f"处理目标音频: {target_path}")
-        target_y, removed = trim_silence(target_y, target_sr, top_db=silence_threshold)
-        if removed > 0.01:
-            print(f"  移除了 {removed:.2f}秒 的静音")
-    
-    n_fft = int(target_sr * window_ms / 1000)
-    hop_length = int(target_sr * hop_ms / 1000)
-    target_mfcc = librosa.feature.mfcc(y=target_y, sr=target_sr, n_mfcc=n_mfcc, n_fft=n_fft, hop_length=hop_length)
-    target_duration = len(target_y) / target_sr
-    
-    # 加载源音频（在其中查找）
-    # 尝试从缓存加载
-    cache_path = get_cache_path(source_path, n_mfcc, window_ms, hop_ms)
-    cache_data = load_source_mfcc_cache(cache_path, source_path)
-    
-    if cache_data is not None:
-        # 从缓存加载
-        source_mfcc = cache_data['source_mfcc']
-        source_y = cache_data['source_y']
-        source_sr = cache_data['source_sr']
-        source_duration = cache_data['source_duration']
-    else:
-        # 重新计算
-        print(f"处理源音频: {source_path}")
-        source_y, source_sr = librosa.load(source_path, sr=None)
-        
-        # 降噪处理
-        if reduce_noise_enabled:
-            source_y = reduce_noise(source_y, source_sr)
-            print(f"  已完成降噪")
-        
-        # 注意：源音频不移除静音，保持原始时间位置的准确性
-        source_duration = len(source_y) / source_sr
-        
-        # 计算完整的源音频MFCC
-        n_fft_source = int(source_sr * window_ms / 1000)
-        hop_length_source = int(source_sr * hop_ms / 1000)
-        source_mfcc = librosa.feature.mfcc(y=source_y, sr=source_sr, n_mfcc=n_mfcc, n_fft=n_fft_source, hop_length=hop_length_source)
-        
-        # 保存到缓存
-        save_source_mfcc_cache(cache_path, source_mfcc, source_y, source_sr, source_duration)
-    
-    load_end_time = time.time()
-    load_elapsed = load_end_time - load_start_time
-    
-    print(f"音频加载完成，耗时: {load_elapsed:.2f}秒")
-    print(f"目标音频长度: {target_duration:.2f}秒")
-    print(f"源音频长度: {source_duration:.2f}秒")
-    
-    # 确保采样率一致
-    if target_sr != source_sr:
-        print(f"警告: 采样率不一致，重新采样到 {source_sr} Hz")
-        target_y = librosa.resample(target_y, orig_sr=target_sr, target_sr=source_sr)
-        target_sr = source_sr
-        n_fft = int(target_sr * window_ms / 1000)
-        hop_length = int(target_sr * hop_ms / 1000)
-        target_mfcc = librosa.feature.mfcc(y=target_y, sr=target_sr, n_mfcc=n_mfcc, n_fft=n_fft, hop_length=hop_length)
-    
-    # 计算滑动窗口参数
     target_samples = len(target_y)
     hop_samples = int(target_samples * hop_ratio)
+    target_frames = target_mfcc.shape[1]
     
-    matches_dtw = []
-    matches_cosine = []
+    # 计算hop_length（从样本数和帧数的关系中推导）
+    hop_length = target_samples // target_frames
+    
+    positions = []
     similarities_dtw = []
     similarities_cosine = []
-    positions = []
     dtw_distances = []
     
-    print(f"\n正在搜索匹配位置...")
+    print(f"正在搜索匹配位置...")
     print(f"同时使用: DTW对齐 + 余弦相似度")
     search_start_time = time.time()
     
     # 滑动窗口搜索
     for start_sample in range(0, len(source_y) - target_samples + 1, hop_samples):
-        end_sample = start_sample + target_samples
-        
-        # 从预计算的MFCC中提取当前窗口的帧
         # 计算MFCC帧索引
         start_frame = int(start_sample / hop_length)
-        # 确保窗口MFCC帧数与目标MFCC帧数相同
-        target_frames = target_mfcc.shape[1]
         end_frame = start_frame + target_frames
         
         # 检查是否超出范围
         if end_frame > source_mfcc.shape[1]:
             break
         
-        # 切片获取窗口MFCC（无需重新计算）
+        # 切片获取窗口MFCC
         window_mfcc = source_mfcc[:, start_frame:end_frame]
         
-        # 同时计算两种相似度
         # 1. DTW相似度
         similarity_dtw, dtw_dist, _ = compute_dtw_similarity(target_mfcc, window_mfcc)
         dtw_distances.append(dtw_dist)
@@ -355,12 +322,25 @@ def find_audio_in_audio(target_path, source_path, n_mfcc=13, threshold=0.7, hop_
         positions.append(time_position)
         similarities_dtw.append(similarity_dtw)
         similarities_cosine.append(similarity_cosine)
+    
     search_end_time = time.time()
     search_elapsed = search_end_time - search_start_time
     print(f"搜索完成，耗时: {search_elapsed:.2f}秒")
     
+    return positions, similarities_dtw, similarities_cosine, dtw_distances
+
+
+def normalize_dtw_similarities(similarities_dtw, dtw_distances):
+    """
+    将DTW距离归一化为相似度
     
-    # 重新计算DTW相似度（基于相对距离）
+    参数:
+        similarities_dtw: 原始DTW相似度列表
+        dtw_distances: DTW距离列表
+    
+    返回:
+        归一化后的相似度列表
+    """
     if len(dtw_distances) > 0:
         min_dist = np.min(dtw_distances)
         max_dist = np.max(dtw_distances)
@@ -369,6 +349,29 @@ def find_audio_in_audio(target_path, source_path, n_mfcc=13, threshold=0.7, hop_
         if dist_range > 0:
             # 重新计算DTW相似度：最小距离=1.0，最大距离=0.0
             similarities_dtw = [1 - (d - min_dist) / dist_range for d in dtw_distances]
+    
+    return similarities_dtw
+
+
+def generate_matches(positions, similarities_dtw, similarities_cosine, target_duration, threshold):
+    """
+    生成匹配位置列表
+    
+    参数:
+        positions: 位置列表
+        similarities_dtw: DTW相似度列表
+        similarities_cosine: 余弦相似度列表
+        target_duration: 目标音频时长
+        threshold: 相似度阈值
+    
+    返回:
+        matches_dtw: DTW匹配列表
+        matches_cosine: 余弦相似度匹配列表
+        matches_both: 同时匹配列表
+    """
+    matches_dtw = []
+    matches_cosine = []
+    matches_both = []
     
     # 生成DTW匹配列表
     for i, similarity in enumerate(similarities_dtw):
@@ -389,7 +392,6 @@ def find_audio_in_audio(target_path, source_path, n_mfcc=13, threshold=0.7, hop_
             })
     
     # 生成同时超过阈值的匹配列表
-    matches_both = []
     for i in range(len(similarities_dtw)):
         if similarities_dtw[i] >= threshold and similarities_cosine[i] >= threshold:
             matches_both.append({
@@ -399,6 +401,24 @@ def find_audio_in_audio(target_path, source_path, n_mfcc=13, threshold=0.7, hop_
                 'similarity_cosine': similarities_cosine[i]
             })
     
+    return matches_dtw, matches_cosine, matches_both
+
+
+def find_best_matches(positions, similarities_dtw, similarities_cosine, dtw_distances, target_duration):
+    """
+    找出最佳匹配位置
+    
+    参数:
+        positions: 位置列表
+        similarities_dtw: DTW相似度列表
+        similarities_cosine: 余弦相似度列表
+        dtw_distances: DTW距离列表
+        target_duration: 目标音频时长
+    
+    返回:
+        best_match_dtw: DTW最佳匹配
+        best_match_cosine: 余弦相似度最佳匹配
+    """
     # 找出DTW最高相似度的位置
     max_similarity_idx_dtw = np.argmax(similarities_dtw)
     best_match_dtw = {
@@ -415,6 +435,104 @@ def find_audio_in_audio(target_path, source_path, n_mfcc=13, threshold=0.7, hop_
         'end_time': positions[max_similarity_idx_cosine] + target_duration,
         'similarity': similarities_cosine[max_similarity_idx_cosine]
     }
+    
+    return best_match_dtw, best_match_cosine
+
+
+def find_audio_in_audio(target_path, source_path, n_mfcc=13, threshold=0.7, hop_ratio=0.5, trim_silence_enabled=True, silence_threshold=30, reduce_noise_enabled=False):
+    """
+    在源音频中查找目标音频片段（主函数）
+    
+    参数:
+        target_path: 目标音频文件路径
+        source_path: 源音频文件路径
+        n_mfcc: MFCC维度
+        threshold: 相似度阈值
+        hop_ratio: 滑动窗口跳跃比例
+        trim_silence_enabled: 是否移除静音
+        silence_threshold: 静音阈值
+        reduce_noise_enabled: 是否启用降噪
+    
+    返回:
+        匹配结果、相似度等信息
+    """
+    print(f"正在加载音频文件...")
+    load_start_time = time.time()
+    
+    if trim_silence_enabled:
+        print(f"已启用静音移除（阈值: {silence_threshold}dB）")
+    
+    # MFCC参数
+    window_ms = 25
+    hop_ms = 10
+    
+    # 1. 加载和预处理目标音频
+    target_y, target_sr, _ = load_and_preprocess_audio(
+        target_path, 
+        reduce_noise_enabled=reduce_noise_enabled,
+        trim_silence_enabled=trim_silence_enabled,
+        silence_threshold=silence_threshold
+    )
+    
+    # 2. 提取目标音频MFCC
+    target_mfcc, n_fft, hop_length = extract_audio_mfcc(target_y, target_sr, n_mfcc, window_ms, hop_ms)
+    target_duration = len(target_y) / target_sr
+    
+    # 3. 加载源音频（尝试从缓存加载）
+    cache_path = get_cache_path(source_path, n_mfcc, window_ms, hop_ms)
+    cache_data = load_source_mfcc_cache(cache_path, source_path)
+    
+    if cache_data is not None:
+        source_mfcc = cache_data['source_mfcc']
+        source_y = cache_data['source_y']
+        source_sr = cache_data['source_sr']
+        source_duration = cache_data['source_duration']
+    else:
+        # 加载和预处理源音频
+        source_y, source_sr, _ = load_and_preprocess_audio(
+            source_path,
+            reduce_noise_enabled=reduce_noise_enabled,
+            trim_silence_enabled=False,  # 源音频不移除静音
+            silence_threshold=silence_threshold
+        )
+        source_duration = len(source_y) / source_sr
+        
+        # 提取源音频MFCC
+        source_mfcc, _, _ = extract_audio_mfcc(source_y, source_sr, n_mfcc, window_ms, hop_ms)
+        
+        # 保存到缓存
+        save_source_mfcc_cache(cache_path, source_mfcc, source_y, source_sr, source_duration)
+    
+    load_elapsed = time.time() - load_start_time
+    print(f"音频加载完成，耗时: {load_elapsed:.2f}秒")
+    print(f"目标音频长度: {target_duration:.2f}秒")
+    print(f"源音频长度: {source_duration:.2f}秒")
+    
+    # 4. 确保采样率一致
+    if target_sr != source_sr:
+        print(f"警告: 采样率不一致，重新采样到 {source_sr} Hz")
+        target_y = librosa.resample(target_y, orig_sr=target_sr, target_sr=source_sr)
+        target_sr = source_sr
+        target_mfcc, _, _ = extract_audio_mfcc(target_y, target_sr, n_mfcc, window_ms, hop_ms)
+    
+    # 5. 计算相似度
+    print()
+    positions, similarities_dtw, similarities_cosine, dtw_distances = compute_window_similarities(
+        target_mfcc, source_mfcc, target_y, source_y, source_sr, hop_ratio
+    )
+    
+    # 6. 归一化DTW相似度
+    similarities_dtw = normalize_dtw_similarities(similarities_dtw, dtw_distances)
+    
+    # 7. 生成匹配列表
+    matches_dtw, matches_cosine, matches_both = generate_matches(
+        positions, similarities_dtw, similarities_cosine, target_duration, threshold
+    )
+    
+    # 8. 找出最佳匹配
+    best_match_dtw, best_match_cosine = find_best_matches(
+        positions, similarities_dtw, similarities_cosine, dtw_distances, target_duration
+    )
     
     return matches_dtw, matches_cosine, matches_both, best_match_dtw, best_match_cosine, positions, similarities_dtw, similarities_cosine, dtw_distances
 
