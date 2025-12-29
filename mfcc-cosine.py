@@ -1,12 +1,7 @@
-import matplotlib.pyplot as plt
 import librosa
 import numpy as np
 from scipy.spatial.distance import cosine
 import argparse
-
-# 设置中文字体
-plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei']  # 黑体或微软雅黑
-plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
 
 # 解析命令行参数
 parser = argparse.ArgumentParser(description='音频MFCC特征提取和相似度计算')
@@ -16,43 +11,15 @@ args = parser.parse_args()
 
 target_file = args.target
 source_file = args.source
+
 n_mfcc=40
-hop_length=2048
+hop_length=512
 
 y, sr = librosa.load(target_file)
 target_mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=n_mfcc, hop_length=hop_length)
 
-# 显示MFCC热图
-# plt.figure(figsize=(12, 4))
-# librosa.display.specshow(
-#     target_mfcc, 
-#     x_axis='time',  # X轴显示时间
-#     sr=sr, 
-#     hop_length=512
-# )
-# plt.colorbar()
-# plt.title(f'MFCC 时间序列 - {target_file}')
-# plt.ylabel('MFCC系数')
-# plt.xlabel('时间 (秒)')
-# plt.tight_layout()
-
-
 y, sr = librosa.load(source_file)
-source_mfcc = librosa.feature.mfcc(y=y, sr=sr,n_mfcc=n_mfcc, hop_length=hop_length)
-
-# 显示MFCC热图
-# plt.figure(figsize=(12, 4))
-# librosa.display.specshow(
-#     source_mfcc, 
-#     x_axis='time',  # X轴显示时间
-#     sr=sr, 
-#     hop_length=512
-# )
-# plt.colorbar()
-# plt.title(f'MFCC 时间序列 - {source_file}')
-# plt.ylabel('MFCC系数')
-# plt.xlabel('时间 (秒)')
-# plt.tight_layout()
+source_mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=n_mfcc, hop_length=hop_length)
 
 # 计算相似度（1 - 余弦距离）
 # 将MFCC特征展平为一维向量
@@ -69,8 +36,8 @@ cosine_distance = cosine(target_mfcc_flat, source_mfcc_flat)
 similarity = 1 - cosine_distance
 
 print(f"\n整体匹配：")
-print(f"余弦距离: {cosine_distance:.4f}")
-print(f"相似度 (1 - 余弦距离): {similarity:.4f}")
+print(f"\t余弦距离: {cosine_distance:.4f}")
+print(f"\t相似度 (1 - 余弦距离): {similarity:.4f}")
 
 # 滑动窗口匹配
 print(f"\n滑动窗口匹配：")
@@ -85,8 +52,10 @@ if query_frames > target_frames:
     query_frames = source_mfcc.shape[1]
     target_frames = target_mfcc.shape[1]
 
-print(f"查询片段长度: {query_frames} 帧")
-print(f"目标音频长度: {target_frames} 帧")
+
+print(f"\t查询片段长度: {query_frames} 帧")
+
+print(f"\t目标音频长度: {target_frames} 帧")
 
 best_similarity = -1
 best_position = 0
@@ -143,21 +112,13 @@ hop_length = 512
 best_time = best_position * hop_length / sr
 query_duration = query_frames * hop_length / sr
 
-print(f"\n最佳匹配位置: 帧 {best_position} (时间: {best_time:.2f}秒)")
-print(f"最佳匹配相似度: {best_similarity:.4f}")
-print(f"匹配片段时间范围: {best_time:.2f}秒 - {best_time + query_duration:.2f}秒")
+print(f"\t最佳匹配位置: 帧 {best_position} (时间: {best_time:.2f}秒)")
+print(f"\t最佳匹配相似度: {best_similarity:.4f}")
+print(f"\t匹配片段时间范围: {best_time:.2f}秒 - {best_time + query_duration:.2f}秒")
 
-# 绘制相似度曲线
-plt.figure(figsize=(12, 4))
-time_positions = np.arange(len(similarities)) * hop_length / sr
-plt.plot(time_positions, similarities, linewidth=1)
-plt.axvline(x=best_time, color='r', linestyle='--', label=f'最佳匹配位置 ({best_time:.2f}秒)')
-plt.axhline(y=best_similarity, color='g', linestyle='--', alpha=0.5, label=f'最佳相似度 ({best_similarity:.4f})')
-plt.xlabel('时间 (秒)')
-plt.ylabel('相似度')
-plt.title('滑动窗口相似度曲线')
-plt.legend()
-plt.grid(True, alpha=0.3)
-plt.tight_layout()
-
-plt.show()
+# 打印所有窗口位置的相似度列表
+# print(f"\n所有窗口位置的余弦相似度列表:")
+# print(f"总窗口数: {len(similarities)}")
+# for idx, sim in enumerate(similarities):
+#     time_pos = idx * hop_length / sr
+#     print(f"位置 {idx} (时间: {time_pos:.2f}秒): {sim:.4f}")
