@@ -4,7 +4,11 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "librosa>=0.10.0",
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+]
 [[tool.uv.index]]
 name = "artifactory"
 url = "https://us-artifactory.apps.ge-healthcare.net/artifactory/api/pypi/pypi-ext/simple"
