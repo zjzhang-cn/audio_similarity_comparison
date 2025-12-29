@@ -6,6 +6,37 @@ import time
 import os
 import pickle
 import hashlib
+try:
+    import noisereduce as nr
+    NOISEREDUCE_AVAILABLE = True
+except ImportError:
+    NOISEREDUCE_AVAILABLE = False
+    print("警告: noisereduce库未安装，降噪功能不可用。可使用 'pip install noisereduce' 安装")
+
+
+def reduce_noise(y, sr, stationary=True):
+    """
+    对音频进行降噪处理
+    
+    参数:
+        y: 音频时间序列
+        sr: 采样率
+        stationary: 是否使用平稳降噪（适用于持续性噪声）
+    
+    返回:
+        y_denoised: 降噪后的音频
+    """
+    if not NOISEREDUCE_AVAILABLE:
+        print("  降噪库不可用，跳过降噪")
+        return y
+    
+    try:
+        # 使用noisereduce进行降噪
+        y_denoised = nr.reduce_noise(y=y, sr=sr, stationary=stationary)
+        return y_denoised
+    except Exception as e:
+        print(f"  降噪失败: {e}，使用原始音频")
+        return y
 
 
 def trim_silence(y, sr, top_db=30, frame_length=2048, hop_length=512):
@@ -172,7 +203,7 @@ def save_source_mfcc_cache(cache_path, source_mfcc, source_y, source_sr, source_
         print(f"  缓存保存失败: {e}")
 
 
-def find_audio_in_audio(target_path, source_path, n_mfcc=13, threshold=0.7, hop_ratio=0.5, trim_silence_enabled=True, silence_threshold=30):
+def find_audio_in_audio(target_path, source_path, n_mfcc=13, threshold=0.7, hop_ratio=0.5, trim_silence_enabled=True, silence_threshold=30, reduce_noise_enabled=False):
     """
     在源音频中查找目标音频片段，同时使用DTW和余弦相似度两种方法
     
@@ -208,9 +239,16 @@ def find_audio_in_audio(target_path, source_path, n_mfcc=13, threshold=0.7, hop_
     # 加载目标音频（要查找的片段）
     target_y, target_sr = librosa.load(target_path, sr=None)
     
+    # 降噪处理
+    if reduce_noise_enabled:
+        print(f"处理目标音频: {target_path}")
+        target_y = reduce_noise(target_y, target_sr)
+        print(f"  已完成降噪")
+    
     # 移除目标音频的静音
     if trim_silence_enabled:
-        print(f"处理目标音频: {target_path}")
+        if not reduce_noise_enabled:
+            print(f"处理目标音频: {target_path}")
         target_y, removed = trim_silence(target_y, target_sr, top_db=silence_threshold)
         if removed > 0.01:
             print(f"  移除了 {removed:.2f}秒 的静音")
@@ -235,6 +273,11 @@ def find_audio_in_audio(target_path, source_path, n_mfcc=13, threshold=0.7, hop_
         # 重新计算
         print(f"处理源音频: {source_path}")
         source_y, source_sr = librosa.load(source_path, sr=None)
+        
+        # 降噪处理
+        if reduce_noise_enabled:
+            source_y = reduce_noise(source_y, source_sr)
+            print(f"  已完成降噪")
         
         # 注意：源音频不移除静音，保持原始时间位置的准确性
         source_duration = len(source_y) / source_sr
@@ -423,12 +466,17 @@ def main():
                         default=30,
                         help='静音阈值 (dB)，低于这个值的声音视为静音 (默认: 30)')
     
+    parser.add_argument('--reduce-noise', 
+                        action='store_true',
+                        help='启用降噪功能（需要安装 noisereduce 库）')
+    
     args = parser.parse_args()
     
     # 设置参数
     target_audio = args.target
     source_audio = args.source
     trim_silence_enabled = not args.no_trim_silence
+    reduce_noise_enabled = args.reduce_noise
     
     print(f"配置信息:")
     print(f"  目标音频: {target_audio}")
@@ -437,6 +485,7 @@ def main():
     print(f"  相似度阈值: {args.threshold}")
     print(f"  跳跃比例: {args.hop_ratio}")
     print(f"  计算方法: DTW + 余弦相似度（同时计算）")
+    print(f"  降噪: {'\u662f' if reduce_noise_enabled else '\u5426'}")
     print(f"  移除静音: {'\u662f' if trim_silence_enabled else '\u5426'}")
     if trim_silence_enabled:
         print(f"  静音阈值: {args.silence_threshold}dB")
@@ -451,7 +500,8 @@ def main():
             threshold=args.threshold,
             hop_ratio=args.hop_ratio,
             trim_silence_enabled=trim_silence_enabled,
-            silence_threshold=args.silence_threshold
+            silence_threshold=args.silence_threshold,
+            reduce_noise_enabled=reduce_noise_enabled
         )
         
         print("\n" + "="*60)
