@@ -22,11 +22,11 @@ def load_mono_audio(path: str, device: torch.device):
     return waveform.to(device), sr
 
 
-def compute_mfcc(waveform: torch.Tensor, sr: int, n_mfcc: int, hop_length: int):
+def compute_mfcc(waveform: torch.Tensor, sr: int, n_mfcc: int, n_fft: int, hop_length: int, win_length: int):
     transform = torchaudio.transforms.MFCC(
         sample_rate=sr,
         n_mfcc=n_mfcc,
-        melkwargs={"n_fft": 2048, "hop_length": hop_length},
+        melkwargs={"n_fft": n_fft, "hop_length": hop_length, "win_length": win_length},
     ).to(waveform.device)  # 确保 transform 在与输入相同的设备上
     mfcc = transform(waveform)  # (channel, n_mfcc, time)
     return mfcc.mean(dim=0)  # (n_mfcc, time)
@@ -81,8 +81,8 @@ if __name__ == "__main__":
         resampler = torchaudio.transforms.Resample(source_sr, sr).to(device)
         source_waveform = resampler(source_waveform)
 
-    target_mfcc = compute_mfcc(target_waveform, sr, n_mfcc, hop_length)
-    source_mfcc = compute_mfcc(source_waveform, sr, n_mfcc, hop_length)
+    target_mfcc = compute_mfcc(target_waveform, sr, n_mfcc, n_fft, hop_length, win_length)
+    source_mfcc = compute_mfcc(source_waveform, sr, n_mfcc, n_fft, hop_length, win_length)
 
     # 整体匹配：直接展平后计算余弦相似度
     min_time = min(target_mfcc.shape[1], source_mfcc.shape[1])
