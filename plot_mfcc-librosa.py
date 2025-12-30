@@ -13,21 +13,30 @@ parser = argparse.ArgumentParser(description='音频MFCC特征提取和相似度
 parser.add_argument('-t', '--target', required=True, help='目标音频文件路径')
 parser.add_argument('-s', '--source', required=True, help='查询音频文件路径')
 args = parser.parse_args()
-
+sr = 16000
+n_mfcc = 40
 target_file = args.target
 source_file = args.source
-n_mfcc=40
-hop_length=2048
+n_fft = 512  # 25ms
+hop_length = int(sr*0.01)  # 10ms
+win_length = int(sr*0.025)  # 25ms
 
-y, sr = librosa.load(target_file)
-target_mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=n_mfcc, hop_length=hop_length)
+y, sr = librosa.load(target_file, sr=sr)
+target_mfcc = librosa.feature.mfcc(
+    y=y,
+    sr=sr,
+    n_mfcc=n_mfcc,
+    n_fft=n_fft,
+    hop_length=hop_length,
+    win_length=win_length
+)
 
 # 显示MFCC热图
 # plt.figure(figsize=(12, 4))
 # librosa.display.specshow(
-#     target_mfcc, 
+#     target_mfcc,
 #     x_axis='time',  # X轴显示时间
-#     sr=sr, 
+#     sr=sr,
 #     hop_length=512
 # )
 # plt.colorbar()
@@ -37,15 +46,23 @@ target_mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=n_mfcc, hop_length=hop_len
 # plt.tight_layout()
 
 
-y, sr = librosa.load(source_file)
-source_mfcc = librosa.feature.mfcc(y=y, sr=sr,n_mfcc=n_mfcc, hop_length=hop_length)
+y, sr = librosa.load(source_file, sr=sr)
+source_mfcc = librosa.feature.mfcc(
+    y=y,
+    sr=sr,
+    n_mfcc=n_mfcc,
+    n_fft=n_fft,
+    hop_length=hop_length,
+    win_length=win_length
+)
+
 
 # 显示MFCC热图
 # plt.figure(figsize=(12, 4))
 # librosa.display.specshow(
-#     source_mfcc, 
+#     source_mfcc,
 #     x_axis='time',  # X轴显示时间
-#     sr=sr, 
+#     sr=sr,
 #     hop_length=512
 # )
 # plt.colorbar()
@@ -93,7 +110,8 @@ best_position = 0
 similarities = []
 
 # 对查询片段进行归一化和统计特征提取
-query_normalized = (source_mfcc - np.mean(source_mfcc, axis=1, keepdims=True)) / (np.std(source_mfcc, axis=1, keepdims=True) + 1e-8)
+query_normalized = (source_mfcc - np.mean(source_mfcc, axis=1, keepdims=True)
+                    ) / (np.std(source_mfcc, axis=1, keepdims=True) + 1e-8)
 query_flat = query_normalized.flatten()
 
 # 提取查询片段的统计特征
@@ -108,11 +126,12 @@ query_stats = np.concatenate([
 for i in range(target_frames - query_frames + 1):
     # 提取当前窗口的MFCC特征
     window = target_mfcc[:, i:i+query_frames]
-    
+
     # 归一化窗口特征
-    window_normalized = (window - np.mean(window, axis=1, keepdims=True)) / (np.std(window, axis=1, keepdims=True) + 1e-8)
+    window_normalized = (window - np.mean(window, axis=1, keepdims=True)
+                         ) / (np.std(window, axis=1, keepdims=True) + 1e-8)
     window_flat = window_normalized.flatten()
-    
+
     # 提取窗口的统计特征
     window_stats = np.concatenate([
         np.mean(window, axis=1),      # 均值
@@ -120,19 +139,19 @@ for i in range(target_frames - query_frames + 1):
         np.max(window, axis=1),       # 最大值
         np.min(window, axis=1),       # 最小值
     ])
-    
+
     # 计算余弦相似度（使用归一化特征）
     cos_dist_norm = cosine(window_flat, query_flat)
     sim_norm = 1 - cos_dist_norm
-    
+
     # 计算统计特征的余弦相似度
     cos_dist_stats = cosine(window_stats, query_stats)
     sim_stats = 1 - cos_dist_stats
-    
+
     # 综合相似度（加权平均）
     sim = 0.7 * sim_norm + 0.3 * sim_stats
     similarities.append(sim)
-    
+
     # 更新最佳匹配
     if sim > best_similarity:
         best_similarity = sim
@@ -151,8 +170,10 @@ print(f"匹配片段时间范围: {best_time:.2f}秒 - {best_time + query_durati
 plt.figure(figsize=(12, 4))
 time_positions = np.arange(len(similarities)) * hop_length / sr
 plt.plot(time_positions, similarities, linewidth=1)
-plt.axvline(x=best_time, color='r', linestyle='--', label=f'最佳匹配位置 ({best_time:.2f}秒)')
-plt.axhline(y=best_similarity, color='g', linestyle='--', alpha=0.5, label=f'最佳相似度 ({best_similarity:.4f})')
+plt.axvline(x=best_time, color='r', linestyle='--',
+            label=f'最佳匹配位置 ({best_time:.2f}秒)')
+plt.axhline(y=best_similarity, color='g', linestyle='--',
+            alpha=0.5, label=f'最佳相似度 ({best_similarity:.4f})')
 plt.xlabel('时间 (秒)')
 plt.ylabel('相似度')
 plt.title('滑动窗口相似度曲线')

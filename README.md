@@ -51,6 +51,8 @@ uv sync
 
 # 或使用 pip
 pip install librosa numpy scipy noisereduce
+#安装torch
+uv pip install torch torchvision torchaudio  --index-url https://download.pytorch.org/whl/cu129
 ```
 
 ### 核心依赖
