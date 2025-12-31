@@ -10,9 +10,43 @@ import time
 # 过滤 torchaudio.load 的弃用警告
 warnings.filterwarnings('ignore', category=UserWarning, module='torchaudio')
 
+# 全局变量用于统计数据传输
+data_transfer_stats = {
+    'count': 0,
+    'total_bytes': 0,
+    'total_time': 0,
+    'transfers': []
+}
+
 # 设置中文字体
 plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei']  # 黑体或微软雅黑
 plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+
+
+def transfer_to_device(tensor: torch.Tensor, device: torch.device, name: str = ""):
+    """将张量传输到指定设备并记录统计信息"""
+    if tensor.device == device:
+        return tensor
+    
+    start_time = time.time()
+    result = tensor.to(device)
+    transfer_time = time.time() - start_time
+    
+    # 计算数据大小（字节）
+    size_bytes = tensor.element_size() * tensor.nelement()
+    
+    data_transfer_stats['count'] += 1
+    data_transfer_stats['total_bytes'] += size_bytes
+    data_transfer_stats['total_time'] += transfer_time
+    data_transfer_stats['transfers'].append({
+        'name': name,
+        'size_mb': size_bytes / (1024**2),
+        'time': transfer_time,
+        'from': str(tensor.device),
+        'to': str(device)
+    })
+    
+    return result
 
 
 def load_mono_audio(path: str, device: torch.device):
@@ -20,7 +54,7 @@ def load_mono_audio(path: str, device: torch.device):
     waveform, sr = torchaudio.load(path)
     if waveform.shape[0] > 1:
         waveform = waveform.mean(dim=0, keepdim=True)
-    return waveform.to(device), sr
+    return transfer_to_device(waveform, device, f"音频加载: {path}"), sr
 
 # 计算 MFCC 特征
 def compute_mfcc(waveform: torch.Tensor, sr: int, n_mfcc: int, n_fft: int, hop_length: int, win_length: int):
@@ -30,7 +64,9 @@ def compute_mfcc(waveform: torch.Tensor, sr: int, n_mfcc: int, n_fft: int, hop_l
         melkwargs={"n_fft": n_fft,
                    "hop_length": hop_length,
                    "win_length": win_length},
-    ).to(waveform.device)  # 确保 transform 在与输入相同的设备上
+    )
+    # 将transform传输到设备
+    transform = transform.to(waveform.device)
     mfcc = transform(waveform)  # (channel, n_mfcc, time)
     return mfcc.mean(dim=0)  # (n_mfcc, time)
 
@@ -168,6 +204,10 @@ if __name__ == "__main__":
         source_waveform = resampler(source_waveform)
     resample_time = time.time() - resample_start
     print(f"重采样时间: {resample_time:.4f} 秒")
+    
+    # 如果使用GPU，同步以确保所有操作完成
+    if device.type == 'cuda':
+        torch.cuda.synchronize()
 
     print(f"\n=== 开始提取 MFCC 特征 ===")
     mfcc_start = time.time()
@@ -226,6 +266,20 @@ if __name__ == "__main__":
     print(f"MFCC提取: {mfcc_time:.4f} 秒 ({mfcc_time/total_elapsed*100:.1f}%)")
     print(f"比对计算: {total_time:.4f} 秒 ({total_time/total_elapsed*100:.1f}%)")
     print(f"总耗时: {total_elapsed:.4f} 秒")
+    
+    # CPU与GPU数据通信统计
+    if data_transfer_stats['count'] > 0:
+        print(f"\n=== CPU与GPU数据通信统计 ===")
+        print(f"传输次数: {data_transfer_stats['count']}")
+        print(f"传输总量: {data_transfer_stats['total_bytes'] / (1024**2):.2f} MB")
+        print(f"传输总时间: {data_transfer_stats['total_time']:.4f} 秒")
+        if data_transfer_stats['total_time'] > 0:
+            bandwidth = (data_transfer_stats['total_bytes'] / (1024**2)) / data_transfer_stats['total_time']
+            print(f"平均带宽: {bandwidth:.2f} MB/s")
+        print(f"\n详细传输记录:")
+        for i, transfer in enumerate(data_transfer_stats['transfers'], 1):
+            print(f"  {i}. {transfer['name']}")
+            print(f"     大小: {transfer['size_mb']:.2f} MB | 时间: {transfer['time']:.4f}秒 | {transfer['from']} -> {transfer['to']}")
 
     # 绘制相似度曲线
     plt.figure(figsize=(12, 8))
