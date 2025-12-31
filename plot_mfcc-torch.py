@@ -86,6 +86,7 @@ if __name__ == "__main__":
 
     # 整体匹配：直接展平后计算余弦相似度
     min_time = min(target_mfcc.shape[1], source_mfcc.shape[1])
+    # 计算整体相似度，只比较头部相同长度
     target_flat = target_mfcc[:, :min_time].reshape(-1)
     source_flat = source_mfcc[:, :min_time].reshape(-1)
     overall_similarity = cosine_sim(target_flat, source_flat)
@@ -150,5 +151,5 @@ if __name__ == "__main__":
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-
-    plt.show()
+    plt.savefig('mfcc_visualization.png', dpi=150, bbox_inches='tight')
+    # plt.show()

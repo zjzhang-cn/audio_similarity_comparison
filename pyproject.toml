@@ -10,20 +10,21 @@ dependencies = [
     "numpy>=1.24.0",
     "pip>=25.3",
     "scipy>=1.10.0",
-    "torch>=2.8.0",
-    "torchaudio>=2.8.0",
+    "torch==2.8.0",
+    "torchvision==0.23.0",
+    "torchaudio==2.8.0",
 ]
 
 
 [[tool.uv.index]]
 name = "pytorch-cuda"
-url = "https://download.pytorch.org/whl/cu128"
+url = "https://download.pytorch.org/whl/cu129"
 explicit = true
 [tool.uv.sources]
 torch = { index = "pytorch-cuda" }
 torchaudio = { index = "pytorch-cuda" }
 
-#[[tool.uv.index]]
-#name = "artifactory"
-#url = "https://us-artifactory.apps.ge-healthcare.net/artifactory/api/pypi/pypi-ext/simple"
+[[tool.uv.index]]
+name = "artifactory"
+url = "https://us-artifactory.apps.ge-healthcare.net/artifactory/api/pypi/pypi-ext/simple"
 ##default = true
